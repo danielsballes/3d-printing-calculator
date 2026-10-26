@@ -1,0 +1,1433 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Calculadora Ad Astra</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+/* Layout: inputs on the left in four blocks (material, time, equipment, business); sticky quote panel on the right; saved quotes below. */
+:root {
+  --bg: #f2f3f8;
+  --surface: #ffffff;
+  --surface-2: #f7f8fc;
+  --ink: #161a2e;
+  --muted: #5b6178;
+  --line: #dde0eb;
+  --accent: #3343c4;
+  --accent-ink: #ffffff;
+  --star: #b9821c;
+  --good: #1f8a5b;
+  --bad: #c0392b;
+  --c-material: #3343c4;
+  --c-energy: #d99a1e;
+  --c-depr: #7a5cc7;
+  --c-maint: #2b8fa8;
+  --c-labor: #d1537a;
+  --c-extras: #8a8f3c;
+  --c-fail: #9a6b52;
+  --c-fee: #8e93a8;
+  --c-ml-fixed: #c9b200;
+  --c-ml-ship: #4f7fd9;
+  --c-ml-ret: #6b6f80;
+  --font-display: "Unbounded", "Trebuchet MS", system-ui, sans-serif;
+  --font-body: "Figtree", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --radius: 12px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1122; --surface: #161a2f; --surface-2: #1c2139; --ink: #e8eaf5; --muted: #9ba1bf;
+    --line: #2a3050; --accent: #8c97ff; --accent-ink: #0e1122; --star: #e9b94c; --good: #4cc98f; --bad: #ff7b6b;
+    --c-material: #8c97ff; --c-energy: #e9b94c; --c-depr: #b39cf2; --c-maint: #5cc3dc; --c-labor: #f08aab;
+    --c-extras: #c3c86a; --c-fail: #cf9a7f; --c-fee: #7d829c; --c-ml-fixed: #e6d24a; --c-ml-ship: #7fa6f0; --c-ml-ret: #a3a7ba;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1122; --surface: #161a2f; --surface-2: #1c2139; --ink: #e8eaf5; --muted: #9ba1bf;
+  --line: #2a3050; --accent: #8c97ff; --accent-ink: #0e1122; --star: #e9b94c; --good: #4cc98f; --bad: #ff7b6b;
+  --c-material: #8c97ff; --c-energy: #e9b94c; --c-depr: #b39cf2; --c-maint: #5cc3dc; --c-labor: #f08aab;
+  --c-extras: #c3c86a; --c-fail: #cf9a7f; --c-fee: #7d829c; --c-ml-fixed: #e6d24a; --c-ml-ship: #7fa6f0; --c-ml-ret: #a3a7ba;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 48px;
+}
+.wrap { max-width: 1180px; margin: 0 auto; }
+
+/* Masthead */
+.masthead {
+  display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between;
+  gap: 12px 24px; padding-block: 32px 24px; border-bottom: 1px solid var(--line); margin-bottom: 24px;
+}
+.brand { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.eyebrow {
+  font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
+  display: flex; align-items: center; gap: 8px;
+}
+.eyebrow svg { width: 14px; height: 14px; fill: var(--star); }
+h1 {
+  font-family: var(--font-display); font-weight: 700; font-size: clamp(24px, 4vw, 34px);
+  line-height: 1.1; margin: 0; text-wrap: balance; letter-spacing: -.01em;
+}
+.masthead p { margin: 0; color: var(--muted); max-width: 52ch; }
+
+/* Main grid */
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 24px; align-items: start; }
+@media (max-width: 960px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+.inputs { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 20px; display: flex; flex-direction: column; gap: 16px; min-width: 0;
+}
+.sec-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; }
+.sec-head h2 { font-family: var(--font-display); font-weight: 500; font-size: 17px; margin: 0; }
+.sec-head .tag { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+
+/* Each field spans three shared rows (label / input / help) so inputs line up across a row
+   even when one label or help text wraps to two lines. */
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); column-gap: 16px; row-gap: 20px; }
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+@supports (grid-template-rows: subgrid) {
+  .field { display: grid; grid-row: span 3; grid-template-rows: subgrid; row-gap: 6px; }
+  .field > span { align-self: end; }
+}
+@media (max-width: 520px) {
+  /* One column: nothing to align across, so drop the empty help row. */
+  .field { display: flex; }
+}
+.field > span { font-size: 13px; font-weight: 600; letter-spacing: .01em; }
+.field small { color: var(--muted); font-size: 12px; line-height: 1.4; align-self: start; }
+.pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+
+/* Step tabs */
+.steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.step {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 10px; row-gap: 2px;
+  align-items: center; text-align: left; padding: 10px 12px; border-radius: 10px; cursor: pointer;
+  background: var(--surface); border: 1px solid var(--line); color: var(--ink); font: inherit; min-width: 0;
+  transition: border-color .15s, background .15s;
+}
+.step:hover { border-color: var(--accent); }
+.step:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.step .n {
+  grid-row: span 2; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
+  font: 600 12px/1 var(--font-mono); border: 1px solid var(--line); color: var(--muted); background: var(--surface-2);
+}
+.step .t { font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.step .v { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.step[aria-selected="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, var(--surface)); }
+.step[aria-selected="true"] .n { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+@media (max-width: 560px) {
+  .step { grid-template-columns: minmax(0, 1fr); justify-items: center; text-align: center; padding: 8px 4px; }
+  .step .n { grid-row: auto; }
+  .step .t { font-size: 12px; max-width: 100%; }
+  .step .v { display: none; }
+}
+.subpanel {
+  display: flex; flex-direction: column; gap: 16px; padding: 16px; border-radius: 10px;
+  background: var(--surface-2); border: 1px solid var(--line);
+}
+.subpanel h3 { font-family: var(--font-display); font-weight: 500; font-size: 15px; margin: 0; }
+.subpanel .input-wrap { background: var(--surface); }
+.subpanel .note { background: var(--surface); }
+.panel-nav { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: 16px; }
+.panel-nav .spacer { flex: 1; }
+.input-wrap {
+  display: flex; align-items: center; background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: 8px; transition: border-color .15s, box-shadow .15s; min-width: 0;
+}
+.input-wrap:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+.input-wrap input, .input-wrap select {
+  flex: 1; min-width: 0; width: 100%; border: 0; background: transparent; color: var(--ink);
+  font: 500 15px/1.2 var(--font-body); padding: 0 12px; height: 42px; font-variant-numeric: tabular-nums; outline: none;
+}
+.input-wrap select { cursor: pointer; }
+.input-wrap select option { background: var(--surface); color: var(--ink); }
+.input-wrap select optgroup { background: var(--surface-2); color: var(--muted); font-style: normal; font-weight: 700; }
+.pre, .suf { font-family: var(--font-mono); font-size: 12px; color: var(--muted); padding: 0 10px; white-space: nowrap; }
+.pre { padding-right: 0; }
+.suf { padding-left: 0; }
+
+.check { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; cursor: pointer; }
+.check input { width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--accent); flex: none; }
+.check small { display: block; color: var(--muted); font-size: 12px; }
+
+.note {
+  background: var(--surface-2); border: 1px dashed var(--line); border-radius: 8px; padding: 10px 12px;
+  font-size: 13px; color: var(--muted);
+}
+.note strong { color: var(--ink); font-variant-numeric: tabular-nums; }
+
+/* Buttons */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+  font: 600 14px/1 var(--font-body); padding: 11px 14px; cursor: pointer; transition: background .15s, border-color .15s;
+}
+.btn:hover { border-color: var(--accent); }
+.btn:focus-visible, .linkbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.primary:hover { background: color-mix(in srgb, var(--accent) 86%, var(--ink)); }
+.btn.small { padding: 7px 10px; font-size: 13px; }
+.btn.danger { color: var(--bad); }
+.btn.danger.armed { background: var(--bad); color: var(--surface); border-color: var(--bad); }
+.btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.row-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.linkbtn { background: none; border: 0; padding: 0; color: var(--accent); font: 600 13px var(--font-body); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+
+/* Quote panel */
+.quote { position: sticky; top: 16px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+@media (max-width: 960px) { .quote { position: static; } }
+.price-card { gap: 14px; }
+.price-label { font-family: var(--font-mono); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.price {
+  font-family: var(--font-display); font-weight: 700; font-size: clamp(32px, 6vw, 42px); line-height: 1;
+  font-variant-numeric: tabular-nums; letter-spacing: -.02em; color: var(--ink); word-break: break-word;
+}
+.price-sub { display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--muted); font-size: 13px; }
+.price-sub b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.stat { padding: 10px 8px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.stat + .stat { border-left: 1px solid var(--line); }
+.stat span { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.stat b { font-size: 15px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.stat b.good { color: var(--good); }
+.stat b.bad { color: var(--bad); }
+
+.bar { display: flex; height: 14px; border-radius: 7px; overflow: hidden; background: var(--surface-2); }
+.bar i { display: block; height: 100%; min-width: 0; transition: width .25s ease; }
+.legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.legend li { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto 46px; gap: 8px; align-items: center; font-size: 13px; }
+.legend .dot { width: 10px; height: 10px; border-radius: 3px; }
+.legend .amt, .legend .pct { font-variant-numeric: tabular-nums; text-align: right; }
+.legend .pct { color: var(--muted); font-family: var(--font-mono); font-size: 12px; }
+.legend li.total { border-top: 1px solid var(--line); padding-top: 6px; font-weight: 700; }
+.warn { color: var(--bad); font-size: 13px; }
+
+/* Saved quotes */
+.saved { margin-top: 24px; }
+.table-scroll { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 560px; }
+th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+td .row-actions { justify-content: flex-end; flex-wrap: nowrap; }
+.empty { color: var(--muted); padding: 16px 0 4px; }
+.empty b { color: var(--ink); }
+
+.toast {
+  position: fixed; left: 50%; transform: translateX(-50%) translateY(20px);
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 8px; font-size: 14px; font-weight: 600;
+  opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; max-width: calc(100vw - 32px);
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+.footer-note { color: var(--muted); font-size: 12px; margin-top: 24px; max-width: 80ch; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+@media print {
+  .inputs, .saved, .row-actions, .toast, .linkbtn { display: none !important; }
+  .layout { grid-template-columns: 1fr; }
+  .quote { position: static; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="brand">
+      <div class="eyebrow">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l2.4 7.2H22l-6.2 4.5 2.4 7.3L12 16.5 5.8 21l2.4-7.3L2 9.2h7.6z"/></svg>
+        Ad Astra · Impresión 3D
+      </div>
+      <h1>Calculadora de precios</h1>
+    </div>
+    <p>Calcula el costo real de cada pieza en pesos colombianos y el precio al que debes venderla, con tu impresora, tu energía y tu mantenimiento.</p>
+  </header>
+
+  <div class="layout">
+    <form class="inputs" id="quoteForm" autocomplete="off" novalidate>
+
+      <!-- Job name: always visible -->
+      <section class="card" aria-labelledby="h-job">
+        <label class="field">
+          <span id="h-job">Nombre del trabajo o cliente</span>
+          <div class="input-wrap"><input id="jobName" type="text" placeholder="Ej.: Llaveros abrelatas x10 · Laura"></div>
+          <small>Se usa al guardar el cálculo y como título del PDF.</small>
+        </label>
+      </section>
+
+      <!-- Step tabs -->
+      <nav class="steps" role="tablist" aria-label="Pasos del cálculo">
+        <button type="button" class="step" role="tab" id="tab-material" aria-controls="panel-material" aria-selected="true" data-step="0">
+          <span class="n">1</span><span class="t">Material</span><span class="v" id="tabv-material">$0</span>
+        </button>
+        <button type="button" class="step" role="tab" id="tab-time" aria-controls="panel-time" aria-selected="false" tabindex="-1" data-step="1">
+          <span class="n">2</span><span class="t">Tiempo</span><span class="v" id="tabv-time">$0</span>
+        </button>
+        <button type="button" class="step" role="tab" id="tab-equipment" aria-controls="panel-equipment" aria-selected="false" tabindex="-1" data-step="2">
+          <span class="n">3</span><span class="t">Equipo</span><span class="v" id="tabv-equipment">$0</span>
+        </button>
+        <button type="button" class="step" role="tab" id="tab-business" aria-controls="panel-business" aria-selected="false" tabindex="-1" data-step="3">
+          <span class="n">4</span><span class="t">Negocio</span><span class="v" id="tabv-business">0 %</span>
+        </button>
+      </nav>
+
+      <!-- 1. Material -->
+      <section class="card panel" role="tabpanel" id="panel-material" aria-labelledby="tab-material">
+        <div class="sec-head"><h2>Material</h2><span class="tag">filamento 1,75 mm</span></div>
+        <div class="grid">
+          <label class="field">
+            <span>Tipo de material</span>
+            <div class="input-wrap"><select id="material"></select></div>
+          </label>
+          <label class="field">
+            <span>Precio del rollo</span>
+            <div class="input-wrap"><span class="pre">$</span><input id="spoolPrice" class="money" type="text" inputmode="numeric"><span class="suf">COP</span></div>
+            <small>Se recuerda por cada material.</small>
+          </label>
+          <label class="field">
+            <span>Peso del rollo</span>
+            <div class="input-wrap"><input id="spoolWeight" type="text" inputmode="decimal"><span class="suf">g</span></div>
+          </label>
+          <label class="field">
+            <span>Peso del trabajo</span>
+            <div class="input-wrap"><input id="partWeight" type="text" inputmode="decimal"><span class="suf">g</span></div>
+            <small>El que reporta Orca para toda la placa, con soportes.</small>
+          </label>
+          <label class="field">
+            <span>Desperdicio extra</span>
+            <div class="input-wrap"><input id="wastePct" type="text" inputmode="decimal"><span class="suf">%</span></div>
+            <small>Purga, brim, línea de cebado, restos del rollo.</small>
+          </label>
+          <label class="field">
+            <span>Insumos por unidad</span>
+            <div class="input-wrap"><span class="pre">$</span><input id="extrasCost" class="money" type="text" inputmode="numeric"><span class="suf">COP</span></div>
+            <small>Argollas, imanes, tags NFC, empaque, pintura.</small>
+          </label>
+        </div>
+        <div class="note" id="materialNote"></div>
+        <div class="panel-nav">
+          <span class="spacer"></span>
+          <button type="button" class="btn" data-goto="1">Siguiente: Tiempo</button>
+        </div>
+      </section>
+
+      <!-- 2. Time -->
+      <section class="card panel" role="tabpanel" id="panel-time" aria-labelledby="tab-time" hidden>
+        <div class="sec-head"><h2>Tiempo y mano de obra</h2><span class="tag">la máquina y tú se cobran aparte</span></div>
+        <div class="grid">
+          <div class="field">
+            <span id="lbl-print-time">Tiempo de impresión</span>
+            <div class="pair">
+              <div class="input-wrap"><input id="printHours" type="text" inputmode="numeric" aria-labelledby="lbl-print-time"><span class="suf">h</span></div>
+              <div class="input-wrap"><input id="printMinutes" type="text" inputmode="numeric" aria-label="Minutos de impresión"><span class="suf">min</span></div>
+            </div>
+            <small>El tiempo estimado que da Orca.</small>
+          </div>
+          <label class="field">
+            <span>Unidades por impresión</span>
+            <div class="input-wrap"><input id="unitsPerJob" type="text" inputmode="numeric"><span class="suf">u.</span></div>
+            <small>Piezas iguales en la misma placa.</small>
+          </label>
+          <label class="field">
+            <span>Valor de tu hora</span>
+            <div class="input-wrap"><span class="pre">$</span><input id="laborRate" class="money" type="text" inputmode="numeric"><span class="suf">COP/h</span></div>
+          </label>
+          <label class="field">
+            <span>Preparación</span>
+            <div class="input-wrap"><input id="prepMinutes" type="text" inputmode="numeric"><span class="suf">min</span></div>
+            <small>Laminar, cargar filamento, retirar la placa.</small>
+          </label>
+          <label class="field">
+            <span>Post-proceso</span>
+            <div class="input-wrap"><input id="postMinutes" type="text" inputmode="numeric"><span class="suf">min</span></div>
+            <small>Quitar soportes, lijar, ensamblar, empacar.</small>
+          </label>
+        </div>
+        <div class="note" id="timeNote"></div>
+        <div class="panel-nav">
+          <button type="button" class="btn" data-goto="0">Anterior</button>
+          <span class="spacer"></span>
+          <button type="button" class="btn" data-goto="2">Siguiente: Equipo</button>
+        </div>
+      </section>
+
+      <!-- 3. Equipment -->
+      <section class="card panel" role="tabpanel" id="panel-equipment" aria-labelledby="tab-equipment" hidden>
+        <div class="sec-head"><h2>Impresora y energía</h2><span class="tag">potencias de ficha técnica a 110 V</span></div>
+        <div class="grid">
+          <label class="field">
+            <span>Modelo</span>
+            <div class="input-wrap"><select id="printerModel"></select></div>
+            <small id="printerHint">Carga precio y potencia pico. Puedes ajustarlos.</small>
+          </label>
+          <label class="field">
+            <span>Nombre en el PDF</span>
+            <div class="input-wrap"><input id="printerName" type="text"></div>
+          </label>
+          <label class="field">
+            <span>Precio de compra</span>
+            <div class="input-wrap"><span class="pre">$</span><input id="printerPrice" class="money" type="text" inputmode="numeric"><span class="suf">COP</span></div>
+            <small>Incluye envío e impuestos de importación.</small>
+          </label>
+          <label class="field">
+            <span>Vida útil estimada</span>
+            <div class="input-wrap"><input id="lifeHours" type="text" inputmode="numeric"><span class="suf">h</span></div>
+          </label>
+          <label class="field">
+            <span>Potencia pico</span>
+            <div class="input-wrap"><input id="powerW" type="text" inputmode="numeric"><span class="suf">W</span></div>
+            <small>La máxima de la ficha técnica, con cámara y cama incluidas.</small>
+          </label>
+          <label class="field">
+            <span>Tarifa de energía</span>
+            <div class="input-wrap"><span class="pre">$</span><input id="kwhPrice" class="money" type="text" inputmode="numeric"><span class="suf">COP/kWh</span></div>
+            <small>El valor del kWh en tu factura de EPM.</small>
+          </label>
+          <label class="field">
+            <span>Mantenimiento al año</span>
+            <div class="input-wrap"><span class="pre">$</span><input id="maintYear" class="money" type="text" inputmode="numeric"><span class="suf">COP</span></div>
+            <small>Boquillas, placa PEI, correas, grasa, filtros.</small>
+          </label>
+          <label class="field">
+            <span>Horas de impresión al año</span>
+            <div class="input-wrap"><input id="hoursYear" type="text" inputmode="numeric"><span class="suf">h/año</span></div>
+            <small>Para repartir el mantenimiento por hora.</small>
+          </label>
+        </div>
+        <div class="note" id="machineNote"></div>
+        <div class="panel-nav">
+          <button type="button" class="btn" data-goto="1">Anterior</button>
+          <span class="spacer"></span>
+          <button type="button" class="btn" data-goto="3">Siguiente: Negocio</button>
+        </div>
+      </section>
+
+      <!-- 4. Business -->
+      <section class="card panel" role="tabpanel" id="panel-business" aria-labelledby="tab-business" hidden>
+        <div class="sec-head"><h2>Negocio</h2><span class="tag">riesgo, ganancia e impuestos</span></div>
+        <div class="grid">
+          <label class="field">
+            <span>Tasa de fallos</span>
+            <div class="input-wrap"><input id="failPct" type="text" inputmode="decimal"><span class="suf">%</span></div>
+            <small>Se aplica a material y máquina, no a tu tiempo.</small>
+          </label>
+          <label class="field">
+            <span>Margen de ganancia</span>
+            <div class="input-wrap"><input id="marginPct" type="text" inputmode="decimal"><span class="suf">%</span></div>
+            <small>Se suma sobre el costo.</small>
+          </label>
+          <label class="field">
+            <span>Canal de venta</span>
+            <div class="input-wrap">
+              <select id="channel">
+                <option value="DIRECT">Venta directa</option>
+                <option value="MELI">Mercado Libre Colombia</option>
+              </select>
+            </div>
+            <small>Mercado Libre calcula sus cargos solo.</small>
+          </label>
+          <label class="field" id="directFeeField">
+            <span>Comisión de venta</span>
+            <div class="input-wrap"><input id="feePct" type="text" inputmode="decimal"><span class="suf">%</span></div>
+            <small>Pasarela de pago o datáfono. Se suma al precio.</small>
+          </label>
+          <label class="field">
+            <span>Redondear hacia arriba a</span>
+            <div class="input-wrap">
+              <select id="roundTo">
+                <option value="1">Sin redondeo</option>
+                <option value="100">$100</option>
+                <option value="500">$500</option>
+                <option value="1000">$1.000</option>
+                <option value="5000">$5.000</option>
+              </select>
+            </div>
+          </label>
+          <label class="field">
+            <span>Unidades del pedido</span>
+            <div class="input-wrap"><input id="orderQty" type="text" inputmode="numeric"><span class="suf">u.</span></div>
+          </label>
+          <label class="field">
+            <span>Nombre del negocio en el PDF</span>
+            <div class="input-wrap"><input id="businessName" type="text"></div>
+          </label>
+        </div>
+        <div class="subpanel" id="mlBlock" hidden>
+          <div class="sec-head"><h3>Mercado Libre Colombia</h3><span class="tag">confirma en tu cuenta de vendedor</span></div>
+          <div class="grid">
+            <label class="field">
+              <span>Tipo de publicación</span>
+              <div class="input-wrap">
+                <select id="mlType">
+                  <option value="CLASSIC">Clásica</option>
+                  <option value="PREMIUM">Premium</option>
+                </select>
+              </div>
+            </label>
+            <label class="field">
+              <span>Comisión por venta</span>
+              <div class="input-wrap"><input id="mlCommission" type="text" inputmode="decimal"><span class="suf">%</span></div>
+              <small>Cambia según la categoría. Se recuerda por tipo.</small>
+            </label>
+            <label class="field">
+              <span>Cargo fijo por unidad</span>
+              <div class="input-wrap"><span class="pre">$</span><input id="mlFixedFee" class="money" type="text" inputmode="numeric"><span class="suf">COP</span></div>
+              <small>Solo en productos baratos.</small>
+            </label>
+            <label class="field">
+              <span>Envío gratis obligatorio desde</span>
+              <div class="input-wrap"><span class="pre">$</span><input id="mlThreshold" class="money" type="text" inputmode="numeric"><span class="suf">COP</span></div>
+              <small>Por debajo se cobra el cargo fijo; desde aquí pagas el envío.</small>
+            </label>
+            <label class="field">
+              <span>Costo del envío por unidad</span>
+              <div class="input-wrap"><span class="pre">$</span><input id="mlShipping" class="money" type="text" inputmode="numeric"><span class="suf">COP</span></div>
+              <small>Depende del peso, el destino y tu reputación.</small>
+            </label>
+            <label class="field">
+              <span>Envío por debajo del límite</span>
+              <div class="input-wrap">
+                <select id="mlShipBelow">
+                  <option value="SELLER">Lo pago yo (envío gratis)</option>
+                  <option value="BUYER">Lo paga el comprador</option>
+                </select>
+              </div>
+              <small>Desde el límite siempre lo pagas tú.</small>
+            </label>
+            <label class="field">
+              <span>Retenciones</span>
+              <div class="input-wrap"><input id="mlWithholding" type="text" inputmode="decimal"><span class="suf">%</span></div>
+              <small>Fuente, IVA e ICA que te descuenten del pago.</small>
+            </label>
+          </div>
+          <label class="check">
+            <input id="mlFeeVat" type="checkbox">
+            <span>Sumar IVA del 19 % a los cargos de Mercado Libre<small>Comisión y cargo fijo. Revísalo en tu factura de cargos.</small></span>
+          </label>
+          <div class="note" id="mlNote"></div>
+        </div>
+        <label class="check">
+          <input id="vatOn" type="checkbox">
+          <span>Cobrar IVA del 19 %<small>Solo si eres responsable de IVA ante la DIAN.</small></span>
+        </label>
+        <div class="panel-nav">
+          <button type="button" class="btn" data-goto="2">Anterior</button>
+          <span class="spacer"></span>
+          <button type="button" class="btn primary" id="saveBtnInline">Guardar cálculo</button>
+        </div>
+      </section>
+
+      <div class="row-actions">
+        <button type="button" class="btn" id="saveDefaultsBtn">Guardar impresora y tarifas como predeterminadas</button>
+        <button type="button" class="linkbtn" id="resetBtn">Volver a los valores de fábrica</button>
+      </div>
+    </form>
+
+    <!-- Quote panel -->
+    <aside class="quote" aria-live="polite">
+      <section class="card price-card" aria-labelledby="h-price">
+        <div>
+          <div class="price-label" id="h-price">Precio sugerido por unidad</div>
+          <div class="price" id="unitPrice">$0</div>
+        </div>
+        <div class="price-sub" id="priceSub"></div>
+        <div class="stats">
+          <div class="stat"><span>Costo</span><b id="statCost">$0</b></div>
+          <div class="stat"><span>Ganancia</span><b id="statProfit">$0</b></div>
+          <div class="stat"><span>Margen real</span><b id="statMargin">0 %</b></div>
+        </div>
+        <div class="bar" id="bar" aria-hidden="true"></div>
+        <ul class="legend" id="legend"></ul>
+        <div class="warn" id="warnings" hidden></div>
+        <div class="row-actions">
+          <button type="button" class="btn primary" id="saveBtn">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h11l3 3v15H5z"/><path d="M8 3v6h8V3"/><path d="M8 21v-7h8v7"/></svg>
+            Guardar cálculo
+          </button>
+          <button type="button" class="btn" id="pdfBtn">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
+            Descargar PDF
+          </button>
+        </div>
+        <label class="check">
+          <input id="includeBreakdown" type="checkbox">
+          <span>Incluir desglose de costos en el PDF<small>Desmárcalo para entregar una cotización limpia al cliente.</small></span>
+        </label>
+      </section>
+    </aside>
+  </div>
+
+  <!-- Saved -->
+  <section class="card saved" aria-labelledby="h-saved">
+    <div class="sec-head">
+      <h2 id="h-saved">Cálculos guardados</h2>
+      <div class="row-actions">
+        <button type="button" class="btn small" id="exportBtn">Exportar respaldo</button>
+        <button type="button" class="btn small" id="importBtn">Importar respaldo</button>
+        <input type="file" id="importFile" accept="application/json,.json" hidden>
+      </div>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>Trabajo</th><th>Material</th><th>Fecha</th><th class="num">Precio u.</th><th class="num">Total pedido</th><th class="num">Acciones</th></tr>
+        </thead>
+        <tbody id="savedBody"></tbody>
+      </table>
+    </div>
+    <p class="empty" id="savedEmpty" hidden>Todavía no hay cálculos guardados. Ajusta los valores y pulsa <b>Guardar cálculo</b>; quedan en este navegador.</p>
+  </section>
+
+  <p class="footer-note">Los cálculos se guardan en el almacenamiento local de este navegador. Si borras los datos del navegador se pierden, así que usa <b>Exportar respaldo</b> de vez en cuando. Los precios de filamento y el consumo de la impresora son valores de referencia: ajústalos con tus facturas o, mejor, mide el consumo con un enchufe inteligente.</p>
+</div>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+// ---------- Configuration ----------
+const STORAGE_KEYS = {
+  saved: 'adastra.pricing.saved.v1',
+  defaults: 'adastra.pricing.defaults.v1',
+};
+
+// Reference prices in COP per 1 kg spool; editable, the user's own price is remembered per material.
+const MATERIALS = {
+  PLA:  { label: 'PLA',                     density: 1.24, price: 75000 },
+  PETG: { label: 'PETG',                    density: 1.27, price: 80000 },
+  ABS:  { label: 'ABS',                     density: 1.04, price: 80000 },
+  ASA:  { label: 'ASA',                     density: 1.07, price: 95000 },
+  TPU:  { label: 'TPU 95A',                 density: 1.21, price: 110000 },
+  PACF: { label: 'PA-CF (nylon con fibra)', density: 1.18, price: 260000 },
+  PC:   { label: 'PC',                      density: 1.20, price: 180000 },
+};
+
+const FACTORY_DEFAULTS = {
+  jobName: '',
+  material: 'PLA',
+  spoolPrice: 75000,
+  spoolWeight: 1000,
+  partWeight: 45,
+  wastePct: 5,
+  extrasCost: 0,
+  printHours: 3,
+  printMinutes: 20,
+  unitsPerJob: 1,
+  prepMinutes: 15,
+  postMinutes: 10,
+  laborRate: 20000,
+  printerModel: 'QIDI_Q2',
+  printerName: 'Qidi Q2',
+  printerPrice: 2800000,
+  lifeHours: 5000,
+  maintYear: 600000,
+  hoursYear: 2000,
+  powerW: 630,
+  kwhPrice: 960,
+  failPct: 8,
+  marginPct: 40,
+  feePct: 0,
+  channel: 'DIRECT',
+  mlType: 'CLASSIC',
+  mlCommission: 13,
+  mlFixedFee: 3000,
+  mlThreshold: 90000,
+  mlShipping: 8000,
+  mlShipBelow: 'SELLER',
+  mlWithholding: 0,
+  mlFeeVat: true,
+  roundTo: '500',
+  orderQty: 1,
+  businessName: 'Ad Astra',
+  vatOn: false,
+  includeBreakdown: true,
+};
+
+const TEXT_FIELDS = new Set(['jobName', 'channel', 'mlType', 'mlShipBelow', 'printerModel', 'printerName', 'businessName', 'material', 'roundTo']);
+const MONEY_FIELDS = new Set(['spoolPrice', 'extrasCost', 'laborRate', 'printerPrice', 'maintYear', 'kwhPrice', 'mlFixedFee', 'mlThreshold', 'mlShipping']);
+const CHECK_FIELDS = new Set(['vatOn', 'includeBreakdown', 'mlFeeVat']);
+const DEFAULTABLE_FIELDS = [
+  'spoolWeight', 'wastePct', 'prepMinutes', 'postMinutes', 'laborRate', 'printerModel', 'printerName', 'printerPrice',
+  'lifeHours', 'maintYear', 'hoursYear', 'powerW', 'kwhPrice', 'failPct', 'marginPct',
+  'feePct', 'roundTo', 'businessName', 'vatOn', 'includeBreakdown',
+  'channel', 'mlType', 'mlCommission', 'mlFixedFee', 'mlThreshold', 'mlShipping', 'mlShipBelow', 'mlWithholding', 'mlFeeVat',
+];
+
+// Mercado Libre Colombia starting values (secondary sources, 2026). Every one is editable because
+// ML changes them by category and date; the seller account's cost simulator is the source of truth.
+const ML_DEFAULT_RATES = { CLASSIC: 13, PREMIUM: 17 };
+const FIELD_IDS = Object.keys(FACTORY_DEFAULTS);
+
+// Peak power is the maximum from each spec sheet at 110 V (Colombian mains).
+// Prices are reference values in COP: Colombian store prices where found (Bambu Lab, Oct 2026),
+// otherwise the USD list price converted at ~3.160 COP/USD with ~60 % for shipping, duties and IVA.
+const PRINTERS = {
+  QIDI_Q2:     { brand: 'QIDI',      name: 'Qidi Q2',              price: 2800000,  powerW: 630,  note: '350 W + 280 W de cámara' },
+  QIDI_Q2C:    { brand: 'QIDI',      name: 'Qidi Q2C',             price: 1800000,  powerW: 350,  note: 'Sin cámara calefactada' },
+  QIDI_PLUS5:  { brand: 'QIDI',      name: 'Qidi Plus 5',          price: 3800000,  powerW: 1200, note: '150 W + 550 W de cámara + 500 W de cama' },
+  QIDI_MAX4:   { brand: 'QIDI',      name: 'Qidi Max4',            price: 5300000,  powerW: 1350, note: '150 W + 500 W de cámara + 700 W de cama' },
+  BAMBU_A1M:   { brand: 'Bambu Lab', name: 'Bambu Lab A1 mini',    price: 1690000,  powerW: 150,  note: 'Precio de tienda en Colombia' },
+  BAMBU_A1:    { brand: 'Bambu Lab', name: 'Bambu Lab A1',         price: 1990000,  powerW: 350,  note: '350 W a 110 V · precio de tienda en Colombia' },
+  BAMBU_P1S:   { brand: 'Bambu Lab', name: 'Bambu Lab P1S',        price: 3300000,  powerW: 350,  note: '350 W a 110 V · precio estimado sin AMS' },
+  BAMBU_P2S:   { brand: 'Bambu Lab', name: 'Bambu Lab P2S',        price: 4690000,  powerW: 1000, note: '1.000 W a 110 V · precio de tienda en Colombia' },
+  BAMBU_H2D:   { brand: 'Bambu Lab', name: 'Bambu Lab H2D',        price: 10990000, powerW: 1320, note: '1.320 W a 110 V · precio de tienda en Colombia' },
+  CREALITY_E3: { brand: 'Creality',  name: 'Creality Ender-3 V3 SE', price: 900000, powerW: 350,  note: 'Fuente de 350 W' },
+  CREALITY_K1C:{ brand: 'Creality',  name: 'Creality K1C',         price: 2000000,  powerW: 350,  note: 'Fuente de 350 W' },
+  CREALITY_K2P:{ brand: 'Creality',  name: 'Creality K2 Plus',     price: 6000000,  powerW: 1200, note: 'Incluye cámara calefactada' },
+  ELEGOO_CC:   { brand: 'Elegoo',    name: 'Elegoo Centauri Carbon', price: 1500000, powerW: 350, note: '350 W a 110 V' },
+  ANYCUBIC_K3: { brand: 'Anycubic',  name: 'Anycubic Kobra 3',     price: 1500000,  powerW: 400,  note: 'Fuente de 400 W' },
+  PRUSA_CORE1: { brand: 'Prusa',     name: 'Prusa CORE One',       price: 6000000,  powerW: 240,  note: 'Fuente de 240 W · se importa desde Prusa' },
+  CUSTOM:      { brand: '',          name: '',                     price: null,     powerW: null, note: 'Escribe el precio y la potencia de tu impresora.' },
+};
+
+const VAT_RATE = 0.19;
+const FILAMENT_AREA_CM2 = Math.PI * 0.0875 * 0.0875; // 1.75 mm filament cross-section
+
+const BREAKDOWN = [
+  { key: 'material',     label: 'Material',      color: 'var(--c-material)' },
+  { key: 'energy',       label: 'Energía',       color: 'var(--c-energy)' },
+  { key: 'depreciation', label: 'Depreciación',  color: 'var(--c-depr)' },
+  { key: 'maintenance',  label: 'Mantenimiento', color: 'var(--c-maint)' },
+  { key: 'labor',        label: 'Mano de obra',  color: 'var(--c-labor)' },
+  { key: 'extras',       label: 'Insumos extra', color: 'var(--c-extras)' },
+  { key: 'failures',     label: 'Fallos',        color: 'var(--c-fail)' },
+  { key: 'fee',          label: 'Comisión',      color: 'var(--c-fee)' },
+  { key: 'mlCommission', label: 'Comisión ML',   color: 'var(--c-fee)' },
+  { key: 'mlFixed',      label: 'Cargo fijo ML', color: 'var(--c-ml-fixed)' },
+  { key: 'mlShipping',   label: 'Envío ML',      color: 'var(--c-ml-ship)' },
+  { key: 'mlWithholding',label: 'Retenciones',   color: 'var(--c-ml-ret)' },
+  { key: 'profit',       label: 'Ganancia',      color: 'var(--good)' },
+];
+
+// ---------- State ----------
+let materialPrices = {};
+let mlRates = { ...ML_DEFAULT_RATES };
+let currentResult = null;
+
+const $ = (id) => document.getElementById(id);
+
+// ---------- Storage helpers (never throw) ----------
+function storageGet(key, fallback) {
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch (err) {
+    return fallback;
+  }
+}
+function storageSet(key, value) {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
+// ---------- Formatting ----------
+const copFormatter = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 });
+const numFormatter = new Intl.NumberFormat('es-CO', { maximumFractionDigits: 1 });
+const formatCop = (n) => copFormatter.format(Math.round(Number.isFinite(n) ? n : 0)).replace(/ /g, ' ');
+const formatNum = (n, digits = 1) => new Intl.NumberFormat('es-CO', { maximumFractionDigits: digits }).format(Number.isFinite(n) ? n : 0);
+const formatThousands = (n) => Math.round(Number(n) || 0).toLocaleString('es-CO');
+const formatPct = (n) => `${formatNum(n * 100, 1)} %`;
+
+function formatHours(h) {
+  const totalMin = Math.round(h * 60);
+  const hh = Math.floor(totalMin / 60);
+  const mm = totalMin % 60;
+  return hh > 0 ? `${hh} h ${mm} min` : `${mm} min`;
+}
+
+// ---------- Form read/write ----------
+function readField(id) {
+  const el = $(id);
+  if (CHECK_FIELDS.has(id)) return el.checked;
+  if (TEXT_FIELDS.has(id)) return el.value.trim();
+  if (MONEY_FIELDS.has(id)) return Number(el.value.replace(/\D/g, '')) || 0;
+  const raw = String(el.value).trim();
+  // Accept both "1,5" (Colombian decimal comma) and "1.5"
+  const normalized = raw.includes(',') ? raw.replace(/\./g, '').replace(',', '.') : raw;
+  const n = parseFloat(normalized);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function writeField(id, value) {
+  const el = $(id);
+  if (!el) return;
+  if (CHECK_FIELDS.has(id)) { el.checked = Boolean(value); return; }
+  if (MONEY_FIELDS.has(id)) { el.value = formatThousands(value); return; }
+  if (TEXT_FIELDS.has(id)) { el.value = value ?? ''; return; }
+  el.value = String(value ?? '').replace('.', ',');
+}
+
+function readAll() {
+  const values = {};
+  FIELD_IDS.forEach((id) => { values[id] = readField(id); });
+  return values;
+}
+
+function writeAll(values) {
+  FIELD_IDS.forEach((id) => { if (id in values) writeField(id, values[id]); });
+}
+
+// ---------- Core pricing model ----------
+function computeQuote(v) {
+  const material = MATERIALS[v.material] || MATERIALS.PLA;
+  const hours = Math.max(0, v.printHours + v.printMinutes / 60);
+  const units = Math.max(1, Math.round(v.unitsPerJob));
+  const qty = Math.max(1, Math.round(v.orderQty));
+
+  const gramPrice = v.spoolWeight > 0 ? v.spoolPrice / v.spoolWeight : 0;
+  const usedGrams = Math.max(0, v.partWeight) * (1 + Math.max(0, v.wastePct) / 100);
+  const filamentMeters = usedGrams / (material.density * FILAMENT_AREA_CM2) / 100;
+
+  // Peak rated power (printer + chamber heater): conservative, no guessing of duty cycles.
+  const watts = Math.max(0, v.powerW);
+  const energyPerHour = (watts / 1000) * v.kwhPrice;
+  const depreciationPerHour = v.lifeHours > 0 ? v.printerPrice / v.lifeHours : 0;
+  const maintenancePerHour = v.hoursYear > 0 ? v.maintYear / v.hoursYear : 0;
+  const machineHour = energyPerHour + depreciationPerHour + maintenancePerHour;
+
+  const job = {
+    material: usedGrams * gramPrice,
+    energy: energyPerHour * hours,
+    depreciation: depreciationPerHour * hours,
+    maintenance: maintenancePerHour * hours,
+    labor: ((Math.max(0, v.prepMinutes) + Math.max(0, v.postMinutes)) / 60) * v.laborRate,
+  };
+  // Failed prints waste filament and machine time; labor on a failed job is not double-charged.
+  job.failures = (job.material + job.energy + job.depreciation + job.maintenance) * Math.max(0, v.failPct) / 100;
+
+  const unit = {};
+  Object.keys(job).forEach((k) => { unit[k] = job[k] / units; });
+  unit.extras = Math.max(0, v.extrasCost);
+  const unitCost = Object.values(unit).reduce((a, b) => a + b, 0);
+
+  const vatRate = v.vatOn ? VAT_RATE : 0;
+  const targetNet = unitCost * (1 + v.marginPct / 100);
+  const step = Math.max(1, Number(v.roundTo) || 1);
+  const roundUp = (x) => Math.ceil(x / step - 1e-9) * step;
+
+  const pricing = v.channel === 'MELI'
+    ? priceForMercadoLibre(v, targetNet, vatRate, roundUp)
+    : priceForDirect(v, targetNet, vatRate, roundUp);
+  const { unitPrice, fees } = pricing;
+
+  const preTax = unitPrice / (1 + vatRate);
+  const vatAmount = unitPrice - preTax;
+  const feeAmount = Object.values(fees).reduce((a, b) => a + b, 0);
+  const profit = preTax - feeAmount - unitCost;
+  const realMargin = preTax > 0 ? profit / preTax : 0;
+  const payout = unitPrice - feeAmount;
+
+  return {
+    materialLabel: material.label,
+    hours, units, qty, gramPrice, usedGrams, filamentMeters, watts,
+    energyPerHour, depreciationPerHour, maintenancePerHour, machineHour,
+    unit, unitCost, unitPrice, preTax, vatAmount, feeAmount, fees, vatRate,
+    channel: v.channel, mlRegime: pricing.mlRegime || null, payout,
+    profit, realMargin,
+    jobCost: unitCost * units,
+    orderTotal: unitPrice * qty,
+    orderProfit: profit * qty,
+  };
+}
+
+// Direct sale: the payment fee is a percentage of the pre-tax price.
+function priceForDirect(v, targetNet, vatRate, roundUp) {
+  const feeRate = Math.min(Math.max(v.feePct, 0), 90) / 100;
+  const unitPrice = roundUp((targetNet / (1 - feeRate)) * (1 + vatRate));
+  return { unitPrice, fees: { fee: (unitPrice / (1 + vatRate)) * feeRate } };
+}
+
+// Mercado Libre fees for a given listed price (commission and fixed fee charged on the full price).
+function mercadoLibreFees(v, price) {
+  const feeVat = v.mlFeeVat ? 1 + VAT_RATE : 1;
+  const below = price < v.mlThreshold;
+  const sellerPaysShipping = !below || v.mlShipBelow === 'SELLER';
+  return {
+    mlCommission: price * (Math.max(0, v.mlCommission) / 100) * feeVat,
+    mlFixed: below ? Math.max(0, v.mlFixedFee) * feeVat : 0,
+    mlShipping: sellerPaysShipping ? Math.max(0, v.mlShipping) : 0,
+    mlWithholding: price * Math.max(0, v.mlWithholding) / 100,
+  };
+}
+
+// Solve the listed price for both fee regimes (fixed fee below the threshold, seller-paid
+// shipping at or above it) and keep the cheapest price that still reaches the target.
+function priceForMercadoLibre(v, targetNet, vatRate, roundUp) {
+  const feeVat = v.mlFeeVat ? 1 + VAT_RATE : 1;
+  const k = 1 / (1 + vatRate) - (Math.max(0, v.mlCommission) / 100) * feeVat - Math.max(0, v.mlWithholding) / 100;
+  if (k <= 0) return { unitPrice: 0, fees: {}, mlRegime: 'invalid' };
+  const thr = Math.max(0, v.mlThreshold);
+  const shipBelow = v.mlShipBelow === 'SELLER' ? Math.max(0, v.mlShipping) : 0;
+  const priceBelow = (targetNet + Math.max(0, v.mlFixedFee) * feeVat + shipBelow) / k;
+  const priceAbove = (targetNet + Math.max(0, v.mlShipping)) / k;
+
+  let raw;
+  if (priceBelow < thr) raw = priceBelow;
+  else if (priceAbove >= thr) raw = priceAbove;
+  else raw = thr;
+
+  let unitPrice = roundUp(raw);
+  // Rounding can push the price over the threshold, where shipping replaces the fixed fee.
+  const netAt = (price) => {
+    const f = mercadoLibreFees(v, price);
+    return price / (1 + vatRate) - f.mlCommission - f.mlFixed - f.mlShipping - f.mlWithholding;
+  };
+  if (netAt(unitPrice) < targetNet - 0.5) unitPrice = roundUp(Math.max(priceAbove, thr));
+
+  return {
+    unitPrice,
+    fees: mercadoLibreFees(v, unitPrice),
+    mlRegime: unitPrice < thr ? 'fixed' : 'shipping',
+  };
+}
+
+function collectWarnings(v) {
+  const out = [];
+  if (v.spoolWeight <= 0) out.push('El peso del rollo debe ser mayor que cero.');
+  if (v.lifeHours <= 0) out.push('La vida útil de la impresora debe ser mayor que cero.');
+  if (v.hoursYear <= 0) out.push('Las horas de impresión al año deben ser mayores que cero.');
+  if (v.partWeight <= 0) out.push('Escribe el peso del trabajo en gramos.');
+  if (v.printHours <= 0 && v.printMinutes <= 0) out.push('Escribe el tiempo de impresión.');
+  if (v.channel === 'DIRECT' && v.feePct >= 90) out.push('La comisión no puede ser del 90 % o más.');
+  if (v.channel === 'MELI' && v.mlCommission + v.mlWithholding >= 80) out.push('La comisión y las retenciones de Mercado Libre suman demasiado.');
+  return out;
+}
+
+// ---------- Rendering ----------
+function render() {
+  if (!$('printerModel').value) $('printerModel').value = 'CUSTOM';
+  updatePrinterHint();
+  const v = readAll();
+  const r = computeQuote(v);
+  currentResult = { values: v, result: r };
+
+  $('unitPrice').textContent = formatCop(r.unitPrice);
+  const sub = [`Pedido de ${r.qty} u.: <b>${formatCop(r.orderTotal)}</b>`];
+  if (r.vatAmount > 0) sub.push(`IVA incluido: <b>${formatCop(r.vatAmount)}</b> por unidad`);
+  if (r.channel === 'MELI') sub.push(`Mercado Libre te deposita: <b>${formatCop(r.payout)}</b> por unidad`);
+  if (r.units > 1) sub.push(`Costo del trabajo completo: <b>${formatCop(r.jobCost)}</b>`);
+  $('priceSub').innerHTML = sub.map((s) => `<span>${s}</span>`).join('');
+
+  $('statCost').textContent = formatCop(r.unitCost);
+  const profitEl = $('statProfit');
+  profitEl.textContent = formatCop(r.profit);
+  profitEl.className = r.profit >= 0 ? 'good' : 'bad';
+  const marginEl = $('statMargin');
+  marginEl.textContent = formatPct(r.realMargin);
+  marginEl.className = r.realMargin >= 0 ? '' : 'bad';
+
+  const parts = { ...r.unit, ...r.fees, profit: Math.max(0, r.profit) };
+  const base = r.preTax > 0 ? r.preTax : 1;
+  $('bar').innerHTML = BREAKDOWN
+    .filter((b) => parts[b.key] > 0)
+    .map((b) => `<i style="width:${(parts[b.key] / base) * 100}%;background:${b.color}" title="${b.label}"></i>`)
+    .join('');
+  const rows = BREAKDOWN
+    .filter((b) => parts[b.key] > 0.5 || b.key === 'profit')
+    .map((b) => `<li><span class="dot" style="background:${b.color}"></span><span>${b.label}</span><span class="amt">${formatCop(b.key === 'profit' ? r.profit : parts[b.key])}</span><span class="pct">${formatNum(((b.key === 'profit' ? r.profit : parts[b.key]) / base) * 100, 1)}%</span></li>`);
+  rows.push(`<li class="total"><span></span><span>Precio sin IVA</span><span class="amt">${formatCop(r.preTax)}</span><span class="pct">100%</span></li>`);
+  $('legend').innerHTML = rows.join('');
+
+  $('tabv-material').textContent = formatCop(r.unit.material + r.unit.extras);
+  $('tabv-time').textContent = formatCop(r.unit.labor);
+  $('tabv-equipment').textContent = formatCop(r.unit.energy + r.unit.depreciation + r.unit.maintenance);
+  $('tabv-business').textContent = `Margen ${formatPct(r.realMargin)}`;
+
+  const isMeli = v.channel === 'MELI';
+  $('mlBlock').hidden = !isMeli;
+  $('directFeeField').hidden = isMeli;
+  if (isMeli) {
+    $('mlNote').innerHTML = r.mlRegime === 'fixed'
+      ? `Con <strong>${formatCop(r.unitPrice)}</strong> el producto queda por debajo de ${formatCop(v.mlThreshold)}: pagas cargo fijo de ${formatCop(r.fees.mlFixed)}` +
+        (v.mlShipBelow === 'SELLER' ? ` y el envío de ${formatCop(r.fees.mlShipping)}.` : ` y el comprador paga el envío.`)
+      : `Con <strong>${formatCop(r.unitPrice)}</strong> el producto llega a ${formatCop(v.mlThreshold)} o más: el envío gratis es obligatorio y pagas ${formatCop(r.fees.mlShipping)}, sin cargo fijo.`;
+  }
+
+  const warnings = collectWarnings(v);
+  const warnEl = $('warnings');
+  warnEl.hidden = warnings.length === 0;
+  warnEl.innerHTML = warnings.join('<br>');
+
+  $('materialNote').innerHTML =
+    `Usarás <strong>${formatNum(r.usedGrams, 1)} g</strong> (unos <strong>${formatNum(r.filamentMeters, 1)} m</strong> de filamento ${r.materialLabel}) ` +
+    `a <strong>${formatCop(r.gramPrice)}</strong> el gramo · <strong>${formatNum(r.usedGrams / r.units, 1)} g</strong> por unidad.`;
+  $('timeNote').innerHTML =
+    `Impresión de <strong>${formatHours(r.hours)}</strong> para ${r.units} u. Tu tiempo cobrado: <strong>${formatNum(v.prepMinutes + v.postMinutes, 0)} min</strong> ` +
+    `= <strong>${formatCop(r.unit.labor * r.units)}</strong> en todo el trabajo.`;
+  $('machineNote').innerHTML =
+    `Una hora de ${escapeHtml(v.printerName || 'tu impresora')} te cuesta <strong>${formatCop(r.machineHour)}</strong>: ` +
+    `energía ${formatCop(r.energyPerHour)} (${formatNum(r.watts, 0)} W pico), depreciación ${formatCop(r.depreciationPerHour)} ` +
+    `y mantenimiento ${formatCop(r.maintenancePerHour)}.`;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+let toastTimer = null;
+function showToast(msg) {
+  const el = $('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
+}
+
+// ---------- Saved quotes ----------
+function getSaved() {
+  const list = storageGet(STORAGE_KEYS.saved, []);
+  return Array.isArray(list) ? list : [];
+}
+
+function saveCurrent() {
+  const { values, result } = currentResult;
+  const list = getSaved();
+  const entry = {
+    id: `q_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+    name: values.jobName || 'Trabajo sin nombre',
+    savedAt: new Date().toISOString(),
+    values,
+    summary: {
+      material: result.materialLabel,
+      unitPrice: result.unitPrice,
+      orderTotal: result.orderTotal,
+      qty: result.qty,
+    },
+  };
+  list.unshift(entry);
+  if (storageSet(STORAGE_KEYS.saved, list)) {
+    renderSaved();
+    showToast('Cálculo guardado en este navegador');
+  } else {
+    showToast('No se pudo guardar: el navegador bloquea el almacenamiento local');
+  }
+}
+
+function renderSaved() {
+  const list = getSaved();
+  const body = $('savedBody');
+  $('savedEmpty').hidden = list.length > 0;
+  body.innerHTML = list.map((q) => {
+    const date = new Date(q.savedAt);
+    const dateStr = Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' });
+    return `<tr data-id="${escapeHtml(q.id)}">
+      <td>${escapeHtml(q.name)}</td>
+      <td>${escapeHtml(q.summary?.material ?? '')}</td>
+      <td>${dateStr}</td>
+      <td class="num">${formatCop(q.summary?.unitPrice)}</td>
+      <td class="num">${formatCop(q.summary?.orderTotal)} <span style="color:var(--muted)">(${q.summary?.qty ?? 1} u.)</span></td>
+      <td class="num"><div class="row-actions">
+        <button type="button" class="btn small" data-action="load">Cargar</button>
+        <button type="button" class="btn small danger" data-action="delete">Eliminar</button>
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+
+function handleSavedClick(event) {
+  const btn = event.target.closest('button[data-action]');
+  if (!btn) return;
+  const id = btn.closest('tr').dataset.id;
+  const list = getSaved();
+  const entry = list.find((q) => q.id === id);
+  if (!entry) return;
+
+  if (btn.dataset.action === 'load') {
+    writeAll({ ...FACTORY_DEFAULTS, ...entry.values });
+    render();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    showToast(`Cargado: ${entry.name}`);
+    return;
+  }
+
+  if (btn.dataset.action === 'delete') {
+    if (!btn.classList.contains('armed')) {
+      btn.classList.add('armed');
+      btn.textContent = '¿Eliminar?';
+      setTimeout(() => {
+        if (btn.isConnected) { btn.classList.remove('armed'); btn.textContent = 'Eliminar'; }
+      }, 3000);
+      return;
+    }
+    storageSet(STORAGE_KEYS.saved, list.filter((q) => q.id !== id));
+    renderSaved();
+    showToast('Cálculo eliminado');
+  }
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function exportBackup() {
+  const payload = {
+    app: 'adastra-pricing',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    defaults: storageGet(STORAGE_KEYS.defaults, null),
+    saved: getSaved(),
+  };
+  downloadBlob(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }), `respaldo-calculadora-${todayStamp()}.json`);
+  showToast('Respaldo descargado');
+}
+
+function importBackup(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+      const incoming = Array.isArray(data) ? data : data.saved;
+      if (!Array.isArray(incoming)) throw new Error('bad format');
+      const current = getSaved();
+      const known = new Set(current.map((q) => q.id));
+      const merged = [...incoming.filter((q) => q && q.id && !known.has(q.id)), ...current];
+      merged.sort((a, b) => String(b.savedAt).localeCompare(String(a.savedAt)));
+      storageSet(STORAGE_KEYS.saved, merged);
+      if (data.defaults && !storageGet(STORAGE_KEYS.defaults, null)) storageSet(STORAGE_KEYS.defaults, data.defaults);
+      renderSaved();
+      showToast(`${merged.length - current.length} cálculos importados`);
+    } catch (err) {
+      showToast('Ese archivo no es un respaldo válido de esta calculadora');
+    }
+  };
+  reader.readAsText(file);
+}
+
+// ---------- Defaults ----------
+function saveDefaults() {
+  const values = readAll();
+  const defaults = { materialPrices: { ...materialPrices }, mlRates: { ...mlRates } };
+  DEFAULTABLE_FIELDS.forEach((id) => { defaults[id] = values[id]; });
+  showToast(storageSet(STORAGE_KEYS.defaults, defaults)
+    ? 'Impresora y tarifas guardadas como predeterminadas'
+    : 'No se pudo guardar: el navegador bloquea el almacenamiento local');
+}
+
+function loadInitialValues() {
+  const stored = storageGet(STORAGE_KEYS.defaults, {}) || {};
+  materialPrices = { ...(stored.materialPrices || {}) };
+  mlRates = { ...ML_DEFAULT_RATES, ...(stored.mlRates || {}) };
+  if ('chamberW' in stored) {
+    // Old schema stored average printer power and chamber power separately; switch to peak power.
+    delete stored.powerW;
+    delete stored.chamberW;
+    storageSet(STORAGE_KEYS.defaults, stored);
+  }
+  const values = { ...FACTORY_DEFAULTS };
+  DEFAULTABLE_FIELDS.forEach((id) => { if (id in stored) values[id] = stored[id]; });
+  values.spoolPrice = materialPrices[values.material] ?? MATERIALS[values.material].price;
+  return values;
+}
+
+function resetToFactory() {
+  materialPrices = {};
+  mlRates = { ...ML_DEFAULT_RATES };
+  try { window.localStorage.removeItem(STORAGE_KEYS.defaults); } catch (err) { /* ignore */ }
+  writeAll(FACTORY_DEFAULTS);
+  render();
+  showToast('Valores de fábrica restaurados');
+}
+
+// ---------- PDF ----------
+function todayStamp() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function slugify(s) {
+  return String(s || 'trabajo').normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'trabajo';
+}
+
+function exportPdf() {
+  const { values: v, result: r } = currentResult;
+  if (!window.jspdf || !window.jspdf.jsPDF) {
+    showToast('No cargó el generador de PDF (revisa tu internet). Abriendo impresión…');
+    setTimeout(() => window.print(), 600);
+    return;
+  }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const W = 210;
+  const M = 18;
+  const navy = [22, 26, 60];
+  const gold = [185, 130, 28];
+  const muted = [100, 106, 130];
+  const dateStr = new Date().toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' });
+
+  // Header band
+  doc.setFillColor(...navy);
+  doc.rect(0, 0, W, 34, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(20);
+  doc.text(v.businessName || 'Ad Astra', M, 16);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.text(v.includeBreakdown ? 'Cálculo de costos de impresión 3D' : 'Cotización de impresión 3D', M, 24);
+  doc.text(dateStr, W - M, 16, { align: 'right' });
+  doc.setTextColor(...gold);
+  doc.text('Per aspera, ad astra', W - M, 24, { align: 'right' });
+
+  let y = 48;
+  doc.setTextColor(...navy);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(15);
+  doc.text(doc.splitTextToSize(v.jobName || 'Trabajo sin nombre', W - 2 * M), M, y);
+  y += 10;
+
+  // Price box
+  doc.setDrawColor(221, 224, 235);
+  doc.setFillColor(246, 247, 252);
+  doc.roundedRect(M, y, W - 2 * M, 30, 3, 3, 'FD');
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(...muted);
+  doc.text('PRECIO POR UNIDAD', M + 6, y + 9);
+  doc.text(`TOTAL DEL PEDIDO (${r.qty} u.)`, W / 2 + 4, y + 9);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(20);
+  doc.setTextColor(...navy);
+  doc.text(formatCop(r.unitPrice), M + 6, y + 21);
+  doc.text(formatCop(r.orderTotal), W / 2 + 4, y + 21);
+  if (r.vatAmount > 0) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(...muted);
+    doc.text(`IVA 19 % incluido (${formatCop(r.vatAmount * r.qty)} en el pedido)`, M + 6, y + 27);
+  }
+  y += 40;
+
+  const sectionTitle = (title) => {
+    if (y > 260) { doc.addPage(); y = 20; }
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(...navy);
+    doc.text(title, M, y);
+    y += 2.5;
+    doc.setDrawColor(...gold);
+    doc.setLineWidth(0.5);
+    doc.line(M, y, M + 22, y);
+    doc.setLineWidth(0.2);
+    y += 6;
+  };
+  const row = (label, value, opts = {}) => {
+    if (y > 278) { doc.addPage(); y = 20; }
+    doc.setFont('helvetica', opts.bold ? 'bold' : 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(...(opts.muted ? muted : [30, 34, 52]));
+    doc.text(label, M, y);
+    doc.text(value, W - M, y, { align: 'right' });
+    doc.setDrawColor(230, 232, 240);
+    doc.line(M, y + 2.2, W - M, y + 2.2);
+    y += 7;
+  };
+
+  sectionTitle('Especificaciones');
+  row('Material', r.materialLabel);
+  row('Filamento por unidad', `${formatNum(r.usedGrams / r.units, 1)} g`);
+  row('Tiempo de impresión', `${formatHours(r.hours)}${r.units > 1 ? ` para ${r.units} unidades` : ''}`);
+  row('Unidades del pedido', `${r.qty}`);
+  row('Impresora', v.printerName || '-');
+  y += 4;
+
+  if (v.includeBreakdown) {
+    sectionTitle('Desglose por unidad');
+    const parts = { ...r.unit, ...r.fees };
+    BREAKDOWN.filter((b) => b.key !== 'profit' && parts[b.key] > 0.5).forEach((b) => {
+      row(b.label, `${formatCop(parts[b.key])}   ${formatNum((parts[b.key] / r.preTax) * 100, 1)} %`);
+    });
+    row('Costo total por unidad', formatCop(r.unitCost), { bold: true });
+    row('Ganancia por unidad', `${formatCop(r.profit)}   ${formatNum(r.realMargin * 100, 1)} %`, { bold: true });
+    row('Precio sin IVA', formatCop(r.preTax));
+    if (r.vatAmount > 0) row('IVA 19 %', formatCop(r.vatAmount));
+    row('Precio final por unidad', formatCop(r.unitPrice), { bold: true });
+    y += 4;
+
+    sectionTitle('Parámetros usados');
+    row('Rollo', `${formatCop(v.spoolPrice)} / ${formatNum(v.spoolWeight, 0)} g  (desperdicio ${formatNum(v.wastePct)} %)`, { muted: true });
+    row('Hora de máquina', `${formatCop(r.machineHour)}  (energía ${formatCop(r.energyPerHour)}, depr. ${formatCop(r.depreciationPerHour)}, mant. ${formatCop(r.maintenancePerHour)})`, { muted: true });
+    row('Potencia y tarifa', `${formatNum(r.watts, 0)} W pico · ${formatCop(v.kwhPrice)} por kWh`, { muted: true });
+    row('Impresora', `${formatCop(v.printerPrice)} · vida útil ${formatThousands(v.lifeHours)} h`, { muted: true });
+    row('Mano de obra', `${formatNum(v.prepMinutes + v.postMinutes, 0)} min a ${formatCop(v.laborRate)} por hora`, { muted: true });
+    row('Negocio', `fallos ${formatNum(v.failPct)} % · margen ${formatNum(v.marginPct)} %`, { muted: true });
+    if (v.channel === 'MELI') {
+      row('Mercado Libre', `${v.mlType === 'PREMIUM' ? 'Premium' : 'Clásica'} ${formatNum(v.mlCommission)} % · retenciones ${formatNum(v.mlWithholding)} %${v.mlFeeVat ? ' · IVA en cargos' : ''}`, { muted: true });
+      row('Te deposita por unidad', formatCop(r.payout), { muted: true });
+    } else {
+      row('Comisión de venta', `${formatNum(v.feePct)} %`, { muted: true });
+    }
+  }
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(...muted);
+  const footer = v.includeBreakdown
+    ? 'Documento de uso interno. Valores en pesos colombianos (COP).'
+    : 'Valores en pesos colombianos (COP). Precio sujeto a cambios en el diseño, material o cantidad.';
+  doc.text(footer, M, 288);
+
+  doc.save(`${v.includeBreakdown ? 'costos' : 'cotizacion'}-${slugify(v.jobName)}-${todayStamp()}.pdf`);
+  showToast('PDF descargado');
+}
+
+// ---------- Step tabs ----------
+const STEP_KEY = 'adastra.pricing.step.v1';
+
+function showStep(index, focusTab = false) {
+  const tabs = Array.from(document.querySelectorAll('.step'));
+  const step = Math.min(Math.max(index, 0), tabs.length - 1);
+  tabs.forEach((tab, i) => {
+    const selected = i === step;
+    tab.setAttribute('aria-selected', String(selected));
+    tab.tabIndex = selected ? 0 : -1;
+    $(tab.getAttribute('aria-controls')).hidden = !selected;
+  });
+  if (focusTab) tabs[step].focus();
+  try { window.sessionStorage.setItem(STEP_KEY, String(step)); } catch (err) { /* ignore */ }
+}
+
+function currentStep() {
+  const tabs = Array.from(document.querySelectorAll('.step'));
+  return Math.max(0, tabs.findIndex((t) => t.getAttribute('aria-selected') === 'true'));
+}
+
+function wireSteps() {
+  const nav = document.querySelector('.steps');
+  nav.addEventListener('click', (e) => {
+    const tab = e.target.closest('.step');
+    if (tab) showStep(Number(tab.dataset.step));
+  });
+  nav.addEventListener('keydown', (e) => {
+    const count = nav.querySelectorAll('.step').length;
+    const moves = { ArrowRight: 1, ArrowLeft: -1 };
+    if (e.key in moves) {
+      e.preventDefault();
+      showStep((currentStep() + moves[e.key] + count) % count, true);
+    } else if (e.key === 'Home') { e.preventDefault(); showStep(0, true); }
+    else if (e.key === 'End') { e.preventDefault(); showStep(count - 1, true); }
+  });
+  document.querySelectorAll('[data-goto]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      showStep(Number(btn.dataset.goto));
+      const nav = document.querySelector('.steps');
+      if (nav.getBoundingClientRect().top < 0) nav.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+  let saved = 0;
+  try { saved = Number(window.sessionStorage.getItem(STEP_KEY)) || 0; } catch (err) { /* ignore */ }
+  showStep(saved);
+}
+
+// ---------- Wiring ----------
+function populatePrinters() {
+  const groups = {};
+  Object.entries(PRINTERS).forEach(([key, p]) => {
+    if (key === 'CUSTOM') return;
+    (groups[p.brand] = groups[p.brand] || []).push(`<option value="${key}">${p.name}</option>`);
+  });
+  $('printerModel').innerHTML = Object.entries(groups)
+    .map(([brand, opts]) => `<optgroup label="${brand}">${opts.join('')}</optgroup>`).join('')
+    + '<option value="CUSTOM">Otra impresora</option>';
+}
+
+function applyPrinterPreset(key) {
+  const preset = PRINTERS[key];
+  if (!preset || key === 'CUSTOM') return;
+  writeField('printerName', preset.name);
+  writeField('printerPrice', preset.price);
+  writeField('powerW', preset.powerW);
+}
+
+function updatePrinterHint() {
+  const preset = PRINTERS[$('printerModel').value] || PRINTERS.CUSTOM;
+  $('printerHint').textContent = preset.note;
+}
+
+function populateMaterials() {
+  $('material').innerHTML = Object.entries(MATERIALS)
+    .map(([key, m]) => `<option value="${key}">${m.label}</option>`).join('');
+}
+
+function onFormInput(event) {
+  const el = event.target;
+  if (MONEY_FIELDS.has(el.id)) {
+    const digits = el.value.replace(/\D/g, '');
+    el.value = digits ? Number(digits).toLocaleString('es-CO') : '';
+    if (el.id === 'spoolPrice') materialPrices[$('material').value] = Number(digits) || 0;
+  }
+  if (el.id === 'printerModel') applyPrinterPreset(el.value);
+  if (el.id === 'mlType') writeField('mlCommission', mlRates[el.value] ?? ML_DEFAULT_RATES[el.value]);
+  if (el.id === 'mlCommission') mlRates[$('mlType').value] = readField('mlCommission');
+  if (el.id === 'material') {
+    const key = el.value;
+    writeField('spoolPrice', materialPrices[key] ?? MATERIALS[key].price);
+  }
+  render();
+}
+
+function init() {
+  populateMaterials();
+  populatePrinters();
+  writeAll(loadInitialValues());
+
+  const form = $('quoteForm');
+  form.addEventListener('input', onFormInput);
+  form.addEventListener('change', onFormInput);
+  form.addEventListener('submit', (e) => e.preventDefault());
+  $('includeBreakdown').addEventListener('change', render);
+
+  $('saveBtn').addEventListener('click', saveCurrent);
+  $('saveBtnInline').addEventListener('click', saveCurrent);
+  wireSteps();
+  $('pdfBtn').addEventListener('click', exportPdf);
+  $('saveDefaultsBtn').addEventListener('click', saveDefaults);
+  $('resetBtn').addEventListener('click', resetToFactory);
+  $('savedBody').addEventListener('click', handleSavedClick);
+  $('exportBtn').addEventListener('click', exportBackup);
+  $('importBtn').addEventListener('click', () => $('importFile').click());
+  $('importFile').addEventListener('change', (e) => {
+    if (e.target.files[0]) importBackup(e.target.files[0]);
+    e.target.value = '';
+  });
+
+  render();
+  renderSaved();
+}
+
+init();
+</script>
+</body>
+</html>
